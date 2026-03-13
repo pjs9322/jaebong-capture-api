@@ -44,6 +44,7 @@ app.get('/capture', async (req, res) => {
         url = 'https://' + url;
     }
 
+    const startTime = Date.now();
     let browser = null;
 
     try {
@@ -137,7 +138,7 @@ app.get('/capture', async (req, res) => {
 
             await document.fonts.ready;
 
-            // 3. 부드러운 스크롤로 Lazy Load 트리거 (청크 단위로 메모리 부담 확인하며 스크롤)
+            // 3. 부드러운 스크롤로 Lazy Load 트리거
             await new Promise((resolve) => {
                 let totalHeight = 0;
                 let distance = 600;
@@ -146,8 +147,7 @@ app.get('/capture', async (req, res) => {
                     window.scrollBy(0, distance);
                     totalHeight += distance;
 
-                    // 너무 길면(20000px 초과) 강제 중단하여 메모리 크래시 방지
-                    if (totalHeight >= scrollHeight - window.innerHeight || totalHeight > 20000) {
+                    if (totalHeight >= scrollHeight - window.innerHeight) {
                         clearInterval(timer);
                         resolve();
                     }
@@ -173,9 +173,7 @@ app.get('/capture', async (req, res) => {
             };
 
             window.scrollTo(0, 0); 
-            // 최대 높이를 15,000px로 캡함 (512MB RAM 환경의 안전 마지노선)
-            const clampedHeight = Math.min(getRealHeight(), 15000);
-            return { height: clampedHeight, wasRestricted: isHeightRestricted };
+            return { height: getRealHeight(), wasRestricted: isHeightRestricted };
         });
 
         // 4. 울트라-로우 메모리 최적화 (Adaptive Logic 강화)
@@ -238,8 +236,9 @@ app.get('/capture', async (req, res) => {
         function sendResponse(imageBuffer, scale, quality, fixApplied) {
             const base64Image = `data:image/jpeg;base64,${imageBuffer.toString('base64')}`;
             const outputSizeKB = Math.round(imageBuffer.length / 1024);
+            const duration = ((Date.now() - startTime) / 1000).toFixed(2);
 
-            console.log(`Successfully captured: ${url} (Height: ${scrollInfo.height}px, Scale: ${scale}, Quality: ${quality}, Size: ${outputSizeKB}KB, Fix: ${fixApplied})`);
+            console.log(`Successfully captured: ${url} (Height: ${scrollInfo.height}px, Scale: ${scale}, Quality: ${quality}, Size: ${outputSizeKB}KB, Fix: ${fixApplied}, Time: ${duration}s)`);
 
             return res.json({
                 status: 'success',
@@ -252,7 +251,8 @@ app.get('/capture', async (req, res) => {
                         quality: quality,
                         estimatedSizeKB: outputSizeKB,
                         fixApplied: fixApplied,
-                        adaptiveApplied: isAutoMode
+                        adaptiveApplied: isAutoMode,
+                        durationSec: duration
                     }
                 }
             });
