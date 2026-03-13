@@ -233,7 +233,11 @@ app.get('/capture', async (req, res) => {
         if (isAutoMode) {
             const height = scrollInfo.height;
             // 스케일을 줄이는 것이 메모리 절약에 가장 효과적입니다.
-            if (height > 10000) {
+            if (height > 15000) {
+                finalScale = 0.2; // 초고고도 페이지 대응 (OOM 방지)
+                finalQuality = 30;
+                console.log(`[Wait Strategy] Extreme height detected (${height}px). Reducing scale to 0.2 for safety.`);
+            } else if (height > 10000) {
                 finalScale = 0.4; // 더 공격적인 스케일 축소
                 finalQuality = 35;
             } else if (height > 5000) {
@@ -249,38 +253,55 @@ app.get('/capture', async (req, res) => {
         }
 
         // 5. 뷰포트 및 스크린샷 설정 확정
-        console.log(`[5/5] Finalizing viewport and taking screenshot... (Height: ${scrollInfo.height}px)`);
-        if (scrollInfo.wasRestricted) {
-            // [Fix 모드] 512MB 환경에서는 뷰포트를 전체로 늘릴 때 크래시 위험이 크므로 스케일을 강제 조정
-            const safeScale = Math.min(finalScale, 0.7); 
+        const usedMemory = Math.round(process.memoryUsage().heapUsed / 1024 / 1024);
+        console.log(`[5/5] Finalizing viewport and taking screenshot... (Height: ${scrollInfo.height}px, Current Heap: ${usedMemory}MB)`);
+        
+        try {
+            if (scrollInfo.wasRestricted) {
+                // [Fix 모드] 512MB 환경에서는 뷰포트를 전체로 늘릴 때 크래시 위험이 크므로 스케일을 강제 조정
+                const safeScale = Math.min(finalScale, 0.7); 
+                
+                await page.setViewport({
+                    width: viewportWidth,
+                    height: scrollInfo.height,
+                    deviceScaleFactor: safeScale
+                });
+                await new Promise(r => setTimeout(r, 1000));
+
+                console.log(`[Action] Calling screenshot (fixed mode)...`);
+                const imageBuffer = await page.screenshot({
+                    fullPage: false,
+                    type: 'jpeg',
+                    quality: finalQuality
+                });
+                return sendResponse(imageBuffer, safeScale, finalQuality, true);
+            } else {
+                await page.setViewport({
+                    width: viewportWidth,
+                    height: 1080,
+                    deviceScaleFactor: finalScale
+                });
+                await new Promise(r => setTimeout(r, 500));
+
+                console.log(`[Action] Calling screenshot (fullPage mode)...`);
+                const imageBuffer = await page.screenshot({
+                    fullPage: true,
+                    type: 'jpeg',
+                    quality: finalQuality
+                });
+                return sendResponse(imageBuffer, finalScale, finalQuality, false);
+            }
+        } catch (screenshotError) {
+            console.error(`[Error] Screenshot operation failed: ${screenshotError.message}`);
             
-            await page.setViewport({
-                width: viewportWidth,
-                height: scrollInfo.height,
-                deviceScaleFactor: safeScale
-            });
-            await new Promise(r => setTimeout(r, 1000));
-
-            const imageBuffer = await page.screenshot({
-                fullPage: false,
-                type: 'jpeg',
-                quality: finalQuality
-            });
-            return sendResponse(imageBuffer, safeScale, finalQuality, true);
-        } else {
-            await page.setViewport({
-                width: viewportWidth,
-                height: 1080,
-                deviceScaleFactor: finalScale
-            });
-            await new Promise(r => setTimeout(r, 500));
-
-            const imageBuffer = await page.screenshot({
-                fullPage: true,
-                type: 'jpeg',
-                quality: finalQuality
-            });
-            return sendResponse(imageBuffer, finalScale, finalQuality, false);
+            // 만약 너무 길어서 실패했다면 억지로라도 부분 캡처 시도
+            if (screenshotError.message.includes('Memory') || scrollInfo.height > 10000) {
+                console.log(`[Fallback] Trying partial capture of top 5000px...`);
+                await page.setViewport({ width: viewportWidth, height: 5000, deviceScaleFactor: 0.5 });
+                const fallbackBuffer = await page.screenshot({ fullPage: false, type: 'jpeg', quality: 30 });
+                return sendResponse(fallbackBuffer, 0.5, 30, true);
+            }
+            throw screenshotError;
         }
 
         function sendResponse(imageBuffer, scale, quality, fixApplied) {
