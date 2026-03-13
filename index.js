@@ -80,16 +80,19 @@ app.get('/capture', async (req, res) => {
                 'usergram.info', 'im-log.app', 'toast.com', 'crashlytics.com', 'app-measurement.com'
             ];
             
-            const blockedKeywords = ['analytics', 'tracking', 'telemetry', 'pixel', 'sentry', 'amplitude', 'tracker'];
+            const blockedKeywords = [
+                'analytics', 'tracking', 'telemetry', 'pixel', 'sentry', 'amplitude', 'tracker',
+                'kakao-pixel', 'daumcdn.net/tiara', 'googlesyndication', 'hotjar', 'clarity'
+            ];
             
             const isBlocked = 
                 blockedDomains.some(domain => url.includes(domain)) ||
                 blockedKeywords.some(keyword => url.includes(keyword));
 
             if (
-                ['manifest', 'other'].includes(resourceType) || 
+                ['manifest', 'other', 'ping'].includes(resourceType) || 
                 isBlocked ||
-                (resourceType === 'image' && (url.includes('ads') || url.includes('banner')))
+                (resourceType === 'image' && (url.includes('ads') || url.includes('banner') || url.includes('metric')))
             ) {
                 request.abort();
             } else {
