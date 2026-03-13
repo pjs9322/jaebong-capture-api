@@ -203,6 +203,15 @@ app.get('/capture', async (req, res) => {
                 }, 150); // 간격도 150ms로 복구 (빠른 스캔)
             });
 
+            const bodyStyle = window.getComputedStyle(document.body);
+            const isHeightRestricted = bodyStyle.height === '100vh' || bodyStyle.height === window.innerHeight + 'px';
+
+            if (isHeightRestricted) {
+                document.body.style.height = 'auto';
+                document.body.style.minHeight = 'auto';
+                document.documentElement.style.height = 'auto';
+            }
+
             const getRealHeight = () => {
                 const body = document.body;
                 const html = document.documentElement;
@@ -217,7 +226,7 @@ app.get('/capture', async (req, res) => {
             const finalHeight = Math.min(realHeight, 15000); 
 
             window.scrollTo(0, 0); 
-            return { height: finalHeight, wasRestricted: realHeight > 15000 };
+            return { height: finalHeight, wasRestricted: isHeightRestricted || realHeight > 15000 };
         });
 
         // 4. 울트라-로우 메모리 최적화 (Adaptive Logic 강화)
@@ -250,16 +259,17 @@ app.get('/capture', async (req, res) => {
         console.log(`[5/5] Taking high-efficiency screenshot... (Height: ${scrollInfo.height}px, Scale: ${finalScale}, Heap: ${usedMemory}MB)`);
         
         try {
-            // Viewport를 전체로 키우지 않고 fullPage: true를 사용하는 것이 512MB 환경의 정석입니다.
+            // [Fix] 스케일이 낮을 때(0.4 이하)는 뷰포트를 직접 늘리는 것이 fullPage: true보다 빠르고 정확합니다.
+            console.log(`[Action] Resizing viewport to ${scrollInfo.height}px and capturing...`);
             await page.setViewport({
                 width: viewportWidth,
-                height: 1000, // Viewport는 작게 고정하여 메모리 보호
+                height: scrollInfo.height,
                 deviceScaleFactor: finalScale
             });
-            await new Promise(r => setTimeout(r, 1000));
+            await new Promise(r => setTimeout(r, 800));
 
             const imageBuffer = await page.screenshot({
-                fullPage: true,
+                fullPage: false,
                 type: 'jpeg',
                 quality: finalQuality
             });
@@ -270,9 +280,9 @@ app.get('/capture', async (req, res) => {
             // 긴급 상황 시 상단 영역만이라도 부분 캡처
             console.log(`[Fallback] Attempting partial capture of top region...`);
             try {
-                await page.setViewport({ width: viewportWidth, height: 3000, deviceScaleFactor: 0.4 });
+                await page.setViewport({ width: viewportWidth, height: 3000, deviceScaleFactor: 0.3 });
                 const fallbackBuffer = await page.screenshot({ fullPage: false, type: 'jpeg', quality: 30 });
-                return sendResponse(fallbackBuffer, 0.4, 30, true);
+                return sendResponse(fallbackBuffer, 0.3, 30, true);
             } catch (fallbackErr) {
                 throw screenshotError;
             }
