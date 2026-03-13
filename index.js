@@ -144,10 +144,10 @@ app.get('/capture', async (req, res) => {
             deviceScaleFactor: deviceScaleFactor
         });
 
-        // 페이지 이동 (안정성을 위해 load 대기 및 타임아웃 조정)
+        // 페이지 이동 (안정성을 위해 domcontentloaded 대기 및 타임아웃 조정)
         try {
-            await page.goto(url, { waitUntil: 'load', timeout: 50000 }); // 타임아웃을 50초로 상향 (복잡한 사이트 대비)
-            console.log(`[3/5] Navigation complete. Waiting for dynamic content...`);
+            await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 }); // 30초 내에 구조만 뜨면 즉시 진행
+            console.log(`[3/5] Navigation complete (DOM content loaded). Waiting for dynamic content...`);
             
             // --- 동적 대기 전략 (Dynamic Wait Strategy) ---
             // 구글 이미지 상세 패널이나 SPA 사이트들은 load 이후에도 렌더링 시간이 필요합니다.
