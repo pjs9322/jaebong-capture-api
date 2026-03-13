@@ -69,9 +69,10 @@ app.get('/capture', async (req, res) => {
     let browser = null;
 
     try {
-        console.log(`Starting capture for: ${url}`);
+        console.log(`[1/5] Launching browser for: ${url}`);
         browser = await puppeteer.launch({
             headless: 'new',
+            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || null,
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
@@ -86,6 +87,7 @@ app.get('/capture', async (req, res) => {
         });
 
         const page = await browser.newPage();
+        console.log(`[2/5] Page instance created. Starting navigation...`);
 
         // --- 리소스 최적화 (광고, 트래커는 차단하되 폰트/미디어는 가시성을 위해 허용) ---
         await page.setRequestInterception(true);
@@ -145,6 +147,7 @@ app.get('/capture', async (req, res) => {
         // 페이지 이동 (안정성을 위해 load 대기 및 타임아웃 조정)
         try {
             await page.goto(url, { waitUntil: 'load', timeout: 50000 }); // 타임아웃을 50초로 상향 (복잡한 사이트 대비)
+            console.log(`[3/5] Navigation complete. Waiting for dynamic content...`);
             
             // --- 동적 대기 전략 (Dynamic Wait Strategy) ---
             // 구글 이미지 상세 패널이나 SPA 사이트들은 load 이후에도 렌더링 시간이 필요합니다.
@@ -163,6 +166,7 @@ app.get('/capture', async (req, res) => {
         if (page.isClosed()) throw new Error('Page was closed during navigation');
 
         // 100vh 문제 해결 및 요소 가시성 확보
+        console.log(`[4/5] Evaluating page elements and triggering lazy-load...`);
         const scrollInfo = await page.evaluate(async () => {
             const style = document.createElement('style');
             style.innerHTML = `
@@ -244,6 +248,7 @@ app.get('/capture', async (req, res) => {
         }
 
         // 5. 뷰포트 및 스크린샷 설정 확정
+        console.log(`[5/5] Finalizing viewport and taking screenshot... (Height: ${scrollInfo.height}px)`);
         if (scrollInfo.wasRestricted) {
             // [Fix 모드] 512MB 환경에서는 뷰포트를 전체로 늘릴 때 크래시 위험이 크므로 스케일을 강제 조정
             const safeScale = Math.min(finalScale, 0.7); 
