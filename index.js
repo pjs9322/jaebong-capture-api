@@ -111,7 +111,17 @@ app.get('/capture', async (req, res) => {
         // 페이지 이동 (안정성을 위해 load 대기 및 타임아웃 조정)
         try {
             await page.goto(url, { waitUntil: 'load', timeout: 35000 }); // 타임아웃을 35초로 약간 단축 (지연된 무한로딩 방지)
-            await new Promise(r => setTimeout(r, 2000));
+            
+            // --- 동적 대기 전략 (Dynamic Wait Strategy) ---
+            // 구글 이미지 상세 패널이나 SPA 사이트들은 load 이후에도 렌더링 시간이 필요합니다.
+            let waitTime = 3000; // 기본 대기 시간 3초로 상향
+            
+            if (url.includes('google.com') || url.includes('google.co.kr')) {
+                console.log('[Wait Strategy] Google detected. Increasing wait time to 5s for dynamic panel hydration...');
+                waitTime = 5500; // 구글은 특히 무거우므로 5.5초 대기
+            }
+            
+            await new Promise(r => setTimeout(r, waitTime));
         } catch (e) {
             console.warn(`Navigation warning for ${url}: ${e.message}`);
         }
