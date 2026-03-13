@@ -8,10 +8,10 @@ const os = require('os');
 try {
     const totalMemoryByte = os.totalmem();
     const totalMemoryMB = Math.floor(totalMemoryByte / (1024 * 1024));
-    const allocatedMemoryMB = Math.floor(totalMemoryMB * 0.40);
+    const allocatedMemoryMB = 128; // Fixed 128MB for Node.js
 
     console.log(`[Memory Manager] Total System RAM: ${totalMemoryMB}MB`);
-    console.log(`[Memory Manager] Allocating 40%: ${allocatedMemoryMB}MB for Node.js Heap (Prioritizing Chromium/Puppeteer)`);
+    console.log(`[Memory Manager] Fixed Allocation: ${allocatedMemoryMB}MB for Node.js Heap (Optimal for 512MB RAM environment)`);
 
     // 상용 서버 환경에서 실행할 명령어 구성
     const args = [
