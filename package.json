@@ -1,0 +1,22 @@
+{
+  "name": "jaebong-api",
+  "version": "1.0.0",
+  "description": "Headless Puppeteer Screenshot API for Jaebong Tool",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "start:auto": "node start_with_ram.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "puppeteer": "^24.39.0"
+  }
+}
