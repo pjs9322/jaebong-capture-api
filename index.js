@@ -5,7 +5,28 @@ const cors = require('cors');
 const app = express();
 const port = process.env.PORT || 3000;
 
-app.use(cors());
+const allowedOrigins = [
+    'https://susunzip.com',
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'http://localhost:8080'
+];
+
+app.use(cors({
+    origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.indexOf(origin) !== -1 || origin.endsWith('.koyeb.app')) {
+            callback(null, true);
+        } else {
+            console.log(`[CORS] Rejected origin: ${origin}`);
+            callback(null, true); // 일단 모든 오리진 허용 (디버깅 편의를 위해 true 유지하되 로그만 남김)
+        }
+    },
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true
+}));
 app.use(express.json());
 
 // 메인 페이지 안내
