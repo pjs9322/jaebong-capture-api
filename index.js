@@ -190,27 +190,18 @@ app.get('/capture', async (req, res) => {
             // 3. 부드러운 스크롤로 Lazy Load 트리거
             await new Promise((resolve) => {
                 let totalHeight = 0;
-                let distance = 600;
+                let distance = document.body.scrollHeight > 10000 ? 1500 : 800; // 훨씬 공격적인 스크롤 거리
                 let timer = setInterval(() => {
-                    let scrollHeight = document.body.scrollHeight;
+                    let currentScrollHeight = document.body.scrollHeight;
                     window.scrollBy(0, distance);
                     totalHeight += distance;
 
-                    if (totalHeight >= scrollHeight - window.innerHeight) {
+                    if (totalHeight >= currentScrollHeight - window.innerHeight || totalHeight > 15000) {
                         clearInterval(timer);
                         resolve();
                     }
-                }, 200);
+                }, 150); // 간격도 150ms로 복구 (빠른 스캔)
             });
-
-            const bodyStyle = window.getComputedStyle(document.body);
-            const isHeightRestricted = bodyStyle.height === '100vh' || bodyStyle.height === window.innerHeight + 'px';
-
-            if (isHeightRestricted) {
-                document.body.style.height = 'auto';
-                document.body.style.minHeight = 'auto';
-                document.documentElement.style.height = 'auto';
-            }
 
             const getRealHeight = () => {
                 const body = document.body;
@@ -221,8 +212,12 @@ app.get('/capture', async (req, res) => {
                 );
             };
 
+            // 최대 높이 제한 (안정성 확보)
+            const realHeight = getRealHeight();
+            const finalHeight = Math.min(realHeight, 15000); 
+
             window.scrollTo(0, 0); 
-            return { height: getRealHeight(), wasRestricted: isHeightRestricted };
+            return { height: finalHeight, wasRestricted: realHeight > 15000 };
         });
 
         // 4. 울트라-로우 메모리 최적화 (Adaptive Logic 강화)
@@ -232,76 +227,55 @@ app.get('/capture', async (req, res) => {
 
         if (isAutoMode) {
             const height = scrollInfo.height;
-            // 스케일을 줄이는 것이 메모리 절약에 가장 효과적입니다.
-            if (height > 15000) {
-                finalScale = 0.2; // 초고고도 페이지 대응 (OOM 방지)
-                finalQuality = 30;
-                console.log(`[Wait Strategy] Extreme height detected (${height}px). Reducing scale to 0.2 for safety.`);
-            } else if (height > 10000) {
-                finalScale = 0.4; // 더 공격적인 스케일 축소
+            // [Ultra-Lightweight Strategy] 
+            // 캔버스 노출 폭(600~700px)에 맞춰 스케일을 대폭 낮추어 성능과 안정성 극대화
+            if (height > 12000) {
+                finalScale = 0.15; // 1920 * 0.15 = 288px 폭 (초장기 페이지)
                 finalQuality = 35;
-            } else if (height > 5000) {
-                finalScale = 0.6;
+            } else if (height > 8000) {
+                finalScale = 0.2;  // 1920 * 0.2 = 384px 폭
+                finalQuality = 40;
+            } else if (height > 4000) {
+                finalScale = 0.3;  // 1920 * 0.3 = 576px 폭
                 finalQuality = 45;
-            } else if (height > 2500) {
-                finalScale = 0.8;
-                finalQuality = 55;
             } else {
-                finalScale = 1.0;
-                finalQuality = 75;
+                finalScale = 0.4;  // 1920 * 0.4 = 768px 폭 (일반 페이지 최적값)
+                finalQuality = 50;
             }
+            console.log(`[Strategy] Ultra-lightweight Scaling: ${finalScale} (Width: ${Math.round(viewportWidth * finalScale)}px)`);
         }
 
         // 5. 뷰포트 및 스크린샷 설정 확정
         const usedMemory = Math.round(process.memoryUsage().heapUsed / 1024 / 1024);
-        console.log(`[5/5] Finalizing viewport and taking screenshot... (Height: ${scrollInfo.height}px, Current Heap: ${usedMemory}MB)`);
+        console.log(`[5/5] Taking high-efficiency screenshot... (Height: ${scrollInfo.height}px, Scale: ${finalScale}, Heap: ${usedMemory}MB)`);
         
         try {
-            if (scrollInfo.wasRestricted) {
-                // [Fix 모드] 512MB 환경에서는 뷰포트를 전체로 늘릴 때 크래시 위험이 크므로 스케일을 강제 조정
-                const safeScale = Math.min(finalScale, 0.7); 
-                
-                await page.setViewport({
-                    width: viewportWidth,
-                    height: scrollInfo.height,
-                    deviceScaleFactor: safeScale
-                });
-                await new Promise(r => setTimeout(r, 1000));
+            // Viewport를 전체로 키우지 않고 fullPage: true를 사용하는 것이 512MB 환경의 정석입니다.
+            await page.setViewport({
+                width: viewportWidth,
+                height: 1000, // Viewport는 작게 고정하여 메모리 보호
+                deviceScaleFactor: finalScale
+            });
+            await new Promise(r => setTimeout(r, 1000));
 
-                console.log(`[Action] Calling screenshot (fixed mode)...`);
-                const imageBuffer = await page.screenshot({
-                    fullPage: false,
-                    type: 'jpeg',
-                    quality: finalQuality
-                });
-                return sendResponse(imageBuffer, safeScale, finalQuality, true);
-            } else {
-                await page.setViewport({
-                    width: viewportWidth,
-                    height: 1080,
-                    deviceScaleFactor: finalScale
-                });
-                await new Promise(r => setTimeout(r, 500));
-
-                console.log(`[Action] Calling screenshot (fullPage mode)...`);
-                const imageBuffer = await page.screenshot({
-                    fullPage: true,
-                    type: 'jpeg',
-                    quality: finalQuality
-                });
-                return sendResponse(imageBuffer, finalScale, finalQuality, false);
-            }
-        } catch (screenshotError) {
-            console.error(`[Error] Screenshot operation failed: ${screenshotError.message}`);
+            const imageBuffer = await page.screenshot({
+                fullPage: true,
+                type: 'jpeg',
+                quality: finalQuality
+            });
+            return sendResponse(imageBuffer, finalScale, finalQuality, scrollInfo.wasRestricted);
             
-            // 만약 너무 길어서 실패했다면 억지로라도 부분 캡처 시도
-            if (screenshotError.message.includes('Memory') || scrollInfo.height > 10000) {
-                console.log(`[Fallback] Trying partial capture of top 5000px...`);
-                await page.setViewport({ width: viewportWidth, height: 5000, deviceScaleFactor: 0.5 });
+        } catch (screenshotError) {
+            console.error(`[Error] Screenshot failed: ${screenshotError.message}`);
+            // 긴급 상황 시 상단 영역만이라도 부분 캡처
+            console.log(`[Fallback] Attempting partial capture of top region...`);
+            try {
+                await page.setViewport({ width: viewportWidth, height: 3000, deviceScaleFactor: 0.4 });
                 const fallbackBuffer = await page.screenshot({ fullPage: false, type: 'jpeg', quality: 30 });
-                return sendResponse(fallbackBuffer, 0.5, 30, true);
+                return sendResponse(fallbackBuffer, 0.4, 30, true);
+            } catch (fallbackErr) {
+                throw screenshotError;
             }
-            throw screenshotError;
         }
 
         function sendResponse(imageBuffer, scale, quality, fixApplied) {
