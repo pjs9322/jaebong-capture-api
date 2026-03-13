@@ -66,20 +66,20 @@ app.get('/capture', async (req, res) => {
 
         const page = await browser.newPage();
 
-        // --- 리소스 최적화 (광고, 트래커, 불필요한 이미지 일부 차단) ---
+        // --- 리소스 최적화 (광고, 트래커는 차단하되 폰트/미디어는 가시성을 위해 허용) ---
         await page.setRequestInterception(true);
         page.on('request', (request) => {
             const resourceType = request.resourceType();
             const url = request.url().toLowerCase();
             
             // 광고 및 트래커 도메인 차단 (메모리 절약의 핵심)
-            const blockedDomains = ['google-analytics.com', 'googletagmanager.com', 'doubleclick.net', 'adservice.google', 'facebook.net', 'fontawesome.com'];
+            const blockedDomains = ['google-analytics.com', 'googletagmanager.com', 'doubleclick.net', 'adservice.google', 'facebook.net'];
             const isBlockedDomain = blockedDomains.some(domain => url.includes(domain));
 
             if (
-                ['manifest', 'other', 'media'].includes(resourceType) || 
+                ['manifest'].includes(resourceType) || // 매니페스트 등 불필요한 메타데이터만 차단
                 isBlockedDomain ||
-                (resourceType === 'image' && url.includes('ads')) // 광고성 이미지는 적극 차단
+                (resourceType === 'image' && url.includes('ads')) // 광고성 이미지 차단
             ) {
                 request.abort();
             } else {
