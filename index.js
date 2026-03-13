@@ -72,14 +72,24 @@ app.get('/capture', async (req, res) => {
             const resourceType = request.resourceType();
             const url = request.url().toLowerCase();
             
-            // 광고 및 트래커 도메인 차단 (메모리 절약의 핵심)
-            const blockedDomains = ['google-analytics.com', 'googletagmanager.com', 'doubleclick.net', 'adservice.google', 'facebook.net'];
-            const isBlockedDomain = blockedDomains.some(domain => url.includes(domain));
+            // --- 초강력 리소스 차단 (메모리 절약 및 속도 향상의 핵심) ---
+            const blockedDomains = [
+                'google-analytics.com', 'googletagmanager.com', 'doubleclick.net', 'adservice.google', 
+                'facebook.net', 'facebook.com', 'amplitude.com', 'sentry.io', 'hotjar.com', 'clarity.ms',
+                'pixel.daangn.com', 'megadata.co.kr', 'channel.io', 'linkedin.com', 'tiktok.com',
+                'usergram.info', 'im-log.app', 'toast.com', 'crashlytics.com', 'app-measurement.com'
+            ];
+            
+            const blockedKeywords = ['analytics', 'tracking', 'telemetry', 'pixel', 'sentry', 'amplitude', 'tracker'];
+            
+            const isBlocked = 
+                blockedDomains.some(domain => url.includes(domain)) ||
+                blockedKeywords.some(keyword => url.includes(keyword));
 
             if (
-                ['manifest'].includes(resourceType) || // 매니페스트 등 불필요한 메타데이터만 차단
-                isBlockedDomain ||
-                (resourceType === 'image' && url.includes('ads')) // 광고성 이미지 차단
+                ['manifest', 'other'].includes(resourceType) || 
+                isBlocked ||
+                (resourceType === 'image' && (url.includes('ads') || url.includes('banner')))
             ) {
                 request.abort();
             } else {
@@ -110,7 +120,7 @@ app.get('/capture', async (req, res) => {
 
         // 페이지 이동 (안정성을 위해 load 대기 및 타임아웃 조정)
         try {
-            await page.goto(url, { waitUntil: 'load', timeout: 35000 }); // 타임아웃을 35초로 약간 단축 (지연된 무한로딩 방지)
+            await page.goto(url, { waitUntil: 'load', timeout: 50000 }); // 타임아웃을 50초로 상향 (복잡한 사이트 대비)
             
             // --- 동적 대기 전략 (Dynamic Wait Strategy) ---
             // 구글 이미지 상세 패널이나 SPA 사이트들은 load 이후에도 렌더링 시간이 필요합니다.
